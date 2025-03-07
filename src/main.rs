@@ -1,6 +1,7 @@
 use crate::support::Dispatch;
 use system::Config;
 mod balances;
+mod proof_of_existence;
 mod support;
 mod system;
 
@@ -13,10 +14,12 @@ mod types {
     pub type Extrinsic = support::Extrinsic<AccoundId, RuntimeCall>;
     pub type Header = support::Header<BlockNumber>;
     pub type Block = support::Block<Header, Extrinsic>;
+    pub type Content = &'static str;
 }
 
 pub enum RuntimeCall {
     Balances(balances::Call<Runtime>),
+    ProofOfExistence(proof_of_existence::Call<Runtime>),
 }
 
 impl system::Config for Runtime {
@@ -29,10 +32,15 @@ impl balances::Config for Runtime {
     type Balance = types::Balance;
 }
 
+impl proof_of_existence::Config for Runtime {
+    type Content = types::Content;
+}
+
 #[derive(Debug)]
 pub struct Runtime {
     system: system::Pallet<Self>,
     balances: balances::Pallet<Self>,
+    poe: proof_of_existence::Pallet<Self>,
 }
 
 impl Runtime {
@@ -40,6 +48,7 @@ impl Runtime {
         Self {
             system: system::Pallet::<Self>::new(),
             balances: balances::Pallet::new(),
+            poe: proof_of_existence::Pallet::new(),
         }
     }
 
@@ -75,6 +84,14 @@ impl support::Dispatch for Runtime {
             RuntimeCall::Balances(call) => {
                 self.balances.dispatch(caller, call)?;
             }
+            RuntimeCall::ProofOfExistence(call) => match call {
+                proof_of_existence::Call::CreateClaim { claim } => {
+                    self.poe.create_claim(caller, claim)?
+                }
+                proof_of_existence::Call::RevokeClaim { claim } => {
+                    self.poe.revoke_claim(caller, claim)?
+                }
+            },
         }
 
         Ok(())
@@ -90,7 +107,7 @@ fn main() {
 
     runtime.balances.set_balance(&alice, 100);
 
-    let block = types::Block {
+    let block_1 = types::Block {
         header: support::Header { block_number: 1 },
         extrinsics: vec![
             support::Extrinsic {
@@ -110,7 +127,51 @@ fn main() {
         ],
     };
 
-    runtime.execute_block(block).expect("invalid block");
+    // blocks with POE
+    let block_2 = types::Block {
+        header: support::Header { block_number: 2 },
+        extrinsics: vec![
+            support::Extrinsic {
+                caller: "Oghenemarho".to_string(),
+                call: RuntimeCall::ProofOfExistence(proof_of_existence::Call::CreateClaim {
+                    claim: "The world is over",
+                }),
+            },
+            support::Extrinsic {
+                caller: "Addison".to_string(),
+                call: RuntimeCall::ProofOfExistence(proof_of_existence::Call::CreateClaim {
+                    claim: "The world is over",
+                }),
+            },
+            support::Extrinsic {
+                caller: "Oghenemarho".to_string(),
+                call: RuntimeCall::ProofOfExistence(proof_of_existence::Call::RevokeClaim {
+                    claim: "The world is over",
+                }),
+            },
+            support::Extrinsic {
+                caller: "Addison".to_string(),
+                call: RuntimeCall::ProofOfExistence(proof_of_existence::Call::CreateClaim {
+                    claim: "The world is over",
+                }),
+            },
+            support::Extrinsic {
+                caller: "Addison".to_string(),
+                call: RuntimeCall::ProofOfExistence(proof_of_existence::Call::RevokeClaim {
+                    claim: "This does not exist",
+                }),
+            },
+            support::Extrinsic {
+                caller: "Oghenemarho".to_string(),
+                call: RuntimeCall::ProofOfExistence(proof_of_existence::Call::RevokeClaim {
+                    claim: "The world is over",
+                }),
+            },
+        ],
+    };
+
+    runtime.execute_block(block_1).expect("invalid block");
+    runtime.execute_block(block_2).expect("invalid block");
 
     println!("{:#?}", runtime)
 }
