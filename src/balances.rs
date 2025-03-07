@@ -1,6 +1,8 @@
 use num::{CheckedAdd, CheckedSub, Zero};
 use std::collections::BTreeMap;
 
+use crate::support;
+
 pub trait Config: crate::system::Config {
     type Balance: Zero + CheckedSub + CheckedAdd + Copy;
 }
@@ -33,7 +35,7 @@ where
         caller: &T::AccoundId,
         to: &T::AccoundId,
         amount: T::Balance,
-    ) -> Result<(), &'static str> {
+    ) -> support::DispatchResult {
         let caller_balance = self.balance(caller);
         let to_balance = self.balance(to);
 

@@ -1,14 +1,35 @@
+use crate::support::Dispatch;
+use system::Config;
 mod balances;
+mod support;
 mod system;
 
+mod types {
+    use crate::{support, RuntimeCall};
+    pub type AccoundId = String;
+    pub type Balance = u128;
+    pub type BlockNumber = u32;
+    pub type Nonce = u32;
+    pub type Extrinsic = support::Extrinsic<AccoundId, RuntimeCall>;
+    pub type Header = support::Header<BlockNumber>;
+    pub type Block = support::Block<Header, Extrinsic>;
+}
+
+pub enum RuntimeCall {
+    BalanceTransfer {
+        to: types::AccoundId,
+        amount: types::Balance,
+    },
+}
+
 impl system::Config for Runtime {
-    type AccoundId = String;
-    type BlockNumber = u32;
-    type Nonce = u32;
+    type AccoundId = types::AccoundId;
+    type BlockNumber = types::BlockNumber;
+    type Nonce = types::Nonce;
 }
 
 impl balances::Config for Runtime {
-    type Balance = u128;
+    type Balance = types::Balance;
 }
 
 #[derive(Debug)]
@@ -23,6 +44,42 @@ impl Runtime {
             system: system::Pallet::<Self>::new(),
             balances: balances::Pallet::new(),
         }
+    }
+
+    fn execute_block(&mut self, block: types::Block) -> support::DispatchResult {
+        self.system.inc_block_number();
+        if self.system.block_number() != block.header.block_number {
+            return Err("block number does not match what is expected");
+        }
+
+        for (i, support::Extrinsic { caller, call }) in block.extrinsics.into_iter().enumerate() {
+            let _res = self.dispatch(caller, call).map_err(|e| {
+                eprintln!(
+                    "Extrinsic Error\n\tBlock Number: {}\n\tExtrinsic Number: {}\n\tError: {}",
+                    block.header.block_number, i, e
+                )
+            });
+        }
+        Ok(())
+    }
+}
+
+impl support::Dispatch for Runtime {
+    type Caller = <Runtime as Config>::AccoundId;
+    type Call = RuntimeCall;
+
+    fn dispatch(
+        &mut self,
+        caller: Self::Caller,
+        runtime_call: Self::Call,
+    ) -> support::DispatchResult {
+        match runtime_call {
+            RuntimeCall::BalanceTransfer { to, amount } => {
+                self.balances.transfer(&caller, &to, amount)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
