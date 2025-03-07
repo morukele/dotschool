@@ -53,6 +53,7 @@ impl Runtime {
         }
 
         for (i, support::Extrinsic { caller, call }) in block.extrinsics.into_iter().enumerate() {
+            self.system.inc_nonce(&caller);
             let _res = self.dispatch(caller, call).map_err(|e| {
                 eprintln!(
                     "Extrinsic Error\n\tBlock Number: {}\n\tExtrinsic Number: {}\n\tError: {}",
@@ -89,25 +90,30 @@ fn main() {
     let charlie = "charlie".to_string();
 
     let mut runtime = Runtime::new();
+
     runtime.balances.set_balance(&alice, 100);
 
-    // Block emulation
-    runtime.system.inc_block_number();
-    assert_eq!(runtime.system.block_number(), 1);
+    let block = types::Block {
+        header: support::Header { block_number: 1 },
+        extrinsics: vec![
+            support::Extrinsic {
+                caller: alice.clone(),
+                call: RuntimeCall::BalanceTransfer {
+                    to: bob,
+                    amount: 30,
+                },
+            },
+            support::Extrinsic {
+                caller: alice,
+                call: RuntimeCall::BalanceTransfer {
+                    to: charlie,
+                    amount: 20,
+                },
+            },
+        ],
+    };
 
-    // First transaction
-    runtime.system.inc_nonce(&alice);
-    let _res = runtime
-        .balances
-        .transfer(&alice, &bob, 30)
-        .map_err(|e| eprint!("{}", e));
-
-    // Second transaction
-    runtime.system.inc_nonce(&alice);
-    let _res = runtime
-        .balances
-        .transfer(&alice, &charlie, 20)
-        .map_err(|e| eprintln!("{}", e));
+    runtime.execute_block(block).expect("invalid block");
 
     println!("{:#?}", runtime)
 }
