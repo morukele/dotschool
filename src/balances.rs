@@ -51,6 +51,25 @@ where
     }
 }
 
+pub enum Call<T: Config> {
+    Transfer {
+        to: T::AccoundId,
+        amount: T::Balance,
+    },
+}
+
+impl<T: Config> support::Dispatch for Pallet<T> {
+    type Caller = T::AccoundId;
+    type Call = Call<T>;
+
+    fn dispatch(&mut self, caller: Self::Caller, call: Self::Call) -> support::DispatchResult {
+        match call {
+            Call::Transfer { to, amount } => self.transfer(&caller, &to, amount)?,
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
